@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from PIL import Image
-from T2IBenchmark import T2IModelWrapper, calculate_coco_fid
+from accelerate import PartialState
 from transformers import (
     AutoTokenizer,
     AutoModel,
@@ -13,22 +13,41 @@ from transformers.generation import (
     PrefixConstrainedLogitsProcessor,
     UnbatchedClassifierFreeGuidanceLogitsProcessor,
 )
+from tqdm import tqdm
 import torch
+import os
 
 from emu3.mllm.processing_emu3 import Emu3Processor
 
+
+POSITIVE_PROMPT = " masterpiece, film grained, best quality."
+NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry."
+PROMPT_DIR = "../ELLA/dpg_bench/prompts/"
+RESULT_DIR = "./results/"
+
+# check directory existence
+if not os.path.exists(PROMPT_DIR):
+    raise FileNotFoundError(f"Directory {PROMPT_DIR} not found")
+os.makedirs(RESULT_DIR, exist_ok=True)
+
+# read all *.txt inside PROMPT_DIR, store into prompt
+# prompt is (caption, filename)
+prompt = []
+for file in os.listdir(PROMPT_DIR):
+    if file.endswith(".txt"):
+        with open(os.path.join(PROMPT_DIR, file), "r") as f:
+            prompt.append((f.read(), file.replace(".txt", "")))
+prompt = [(p[0] + POSITIVE_PROMPT, p[1]) for p in prompt]
+print(f"Length of prompt: {len(prompt)}")
+print(f"First prompt: {prompt[0]}")
 
 # model path
 EMU_HUB = "BAAI/Emu3-Gen"
 VQ_HUB = "BAAI/Emu3-VisionTokenizer"
 
-# prepare input
-POSITIVE_PROMPT = " masterpiece, film grained, best quality."
-NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry."
 
-
-class Emu3Wrapper(T2IModelWrapper):
-
+# model wrapper
+class Emu3Wrapper:
     def load_model(self, device: torch.device):
         """Initialize model here"""
 
@@ -56,10 +75,12 @@ class Emu3Wrapper(T2IModelWrapper):
             self.image_processor, self.image_tokenizer, self.tokenizer
         )
 
-    def generate(self, caption: str) -> Image.Image:
+    def generate(self, input: list[tuple[str, int]]) -> Image.Image:
         """Generate PIL image for provided caption"""
 
         classifier_free_guidance = 3.0
+        caption = [i[0] for i in input]
+        filename = [i[1] for i in input]
 
         kwargs = dict(
             mode="G",
@@ -69,7 +90,7 @@ class Emu3Wrapper(T2IModelWrapper):
             padding="longest",
         )
         pos_inputs = self.processor(text=caption, **kwargs)
-        neg_inputs = self.processor(text=NEGATIVE_PROMPT, **kwargs)
+        neg_inputs = self.processor(text=[NEGATIVE_PROMPT] * len(caption), **kwargs)
 
         # prepare hyper parameters
         GENERATION_CONFIG = GenerationConfig(
@@ -111,9 +132,25 @@ class Emu3Wrapper(T2IModelWrapper):
             for idx_j, im in enumerate(mm_list):
                 if not isinstance(im, Image.Image):
                     continue
-                return im
+                im.save(os.path.join(RESULT_DIR, f"{filename[idx_i]}.png"))
+                return
 
 
-fid, fid_data = calculate_coco_fid(
-    Emu3Wrapper, device="cuda:0", save_generations_dir="coco_generations/"
-)
+# run inference with distributed state
+WORLD_SIZE = 4
+CHUNK_SIZE = (len(prompt) - 1) // WORLD_SIZE + 1
+chunks = [prompt[i : i + CHUNK_SIZE] for i in range(0, len(prompt), CHUNK_SIZE)]
+print(f"Number of chunks: {len(chunks)}")
+print(f"Chunk size: {len(chunks[0])}")
+
+distributed_state = PartialState()
+with distributed_state.split_between_processes(chunks) as prompt:
+    BATCH_SIZE = 128
+    batches = [prompt[i : i + BATCH_SIZE] for i in range(0, len(prompt), BATCH_SIZE)]
+    print(f"Number of batches: {len(batches)}")
+    print(f"Batch size: {len(batches[0])}")
+
+    emu3 = Emu3Wrapper()
+    emu3.load_model(distributed_state.device)
+    for batch in tqdm(batches):
+        emu3.generate(batch)

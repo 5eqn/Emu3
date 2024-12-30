@@ -137,14 +137,8 @@ class Emu3Wrapper:
 
 
 # run inference with distributed state
-WORLD_SIZE = 4
-CHUNK_SIZE = (len(prompt) - 1) // WORLD_SIZE + 1
-chunks = [prompt[i : i + CHUNK_SIZE] for i in range(0, len(prompt), CHUNK_SIZE)]
-print(f"Number of chunks: {len(chunks)}")
-print(f"Chunk size: {len(chunks[0])}")
-
 distributed_state = PartialState()
-with distributed_state.split_between_processes(chunks) as prompt:
+with distributed_state.split_between_processes(prompt) as prompt:
     BATCH_SIZE = 128
     batches = [prompt[i : i + BATCH_SIZE] for i in range(0, len(prompt), BATCH_SIZE)]
     print(f"Number of batches: {len(batches)}")

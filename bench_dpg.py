@@ -139,7 +139,7 @@ class Emu3Wrapper:
 # run inference with distributed state
 distributed_state = PartialState()
 with distributed_state.split_between_processes(prompt) as prompt:
-    BATCH_SIZE = 128
+    BATCH_SIZE = 4
     batches = [prompt[i : i + BATCH_SIZE] for i in range(0, len(prompt), BATCH_SIZE)]
     print(f"Number of batches: {len(batches)}")
     print(f"Batch size: {len(batches[0])}")

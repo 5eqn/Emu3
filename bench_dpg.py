@@ -129,17 +129,21 @@ class Emu3Wrapper:
 
         for idx_i, out in enumerate(outputs):
             mm_list = self.processor.decode(out)
+            image_count = 0
             for idx_j, im in enumerate(mm_list):
                 if not isinstance(im, Image.Image):
                     continue
-                im.save(os.path.join(RESULT_DIR, f"{filename[idx_i]}.png"))
-                return
+                image_count += 1
+                if image_count > 1:
+                    print(f"More than one image generated for {filename[idx_i]}")
+                else:
+                    im.save(os.path.join(RESULT_DIR, f"{filename[idx_i]}.png"))
 
 
 # run inference with distributed state
 distributed_state = PartialState()
 with distributed_state.split_between_processes(prompt) as prompt:
-    BATCH_SIZE = 4
+    BATCH_SIZE = 8
     batches = [prompt[i : i + BATCH_SIZE] for i in range(0, len(prompt), BATCH_SIZE)]
     print(f"Number of batches: {len(batches)}")
     print(f"Batch size: {len(batches[0])}")

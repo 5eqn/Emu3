@@ -26,6 +26,7 @@ parser.add_argument("--prompt-dir", type=str, default="../ELLA/dpg_bench/prompts
 parser.add_argument("--result-dir", type=str, default="./results/")
 parser.add_argument("--batch-size", type=int, default=16)
 args = parser.parse_args()
+print(args)
 
 # prepare prompt
 POSITIVE_PROMPT = " masterpiece, film grained, best quality."

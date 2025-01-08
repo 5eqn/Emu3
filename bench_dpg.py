@@ -16,14 +16,21 @@ from transformers.generation import (
 from tqdm import tqdm
 import torch
 import os
+import argparse
 
 from emu3.mllm.processing_emu3 import Emu3Processor
 
+# read result dir from command line argument
+parser = argparse.ArgumentParser()
+parser.add_argument("--prompt-dir", type=str, default="../ELLA/dpg_bench/prompts/")
+parser.add_argument("--result-dir", type=str, default="./results/")
+args = parser.parse_args()
 
+# prepare prompt
 POSITIVE_PROMPT = " masterpiece, film grained, best quality."
 NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry."
-PROMPT_DIR = "../ELLA/dpg_bench/prompts/"
-RESULT_DIR = "./results/"
+PROMPT_DIR = args.prompt_dir
+RESULT_DIR = args.result_dir
 
 # check directory existence
 if not os.path.exists(PROMPT_DIR):

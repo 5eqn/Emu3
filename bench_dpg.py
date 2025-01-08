@@ -24,6 +24,7 @@ from emu3.mllm.processing_emu3 import Emu3Processor
 parser = argparse.ArgumentParser()
 parser.add_argument("--prompt-dir", type=str, default="../ELLA/dpg_bench/prompts/")
 parser.add_argument("--result-dir", type=str, default="./results/")
+parser.add_argument("--batch-size", type=int, default=16)
 args = parser.parse_args()
 
 # prepare prompt
@@ -31,6 +32,7 @@ POSITIVE_PROMPT = " masterpiece, film grained, best quality."
 NEGATIVE_PROMPT = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry."
 PROMPT_DIR = args.prompt_dir
 RESULT_DIR = args.result_dir
+BATCH_SIZE = args.batch_size
 
 # check directory existence
 if not os.path.exists(PROMPT_DIR):
@@ -150,7 +152,6 @@ class Emu3Wrapper:
 # run inference with distributed state
 distributed_state = PartialState()
 with distributed_state.split_between_processes(prompt) as prompt:
-    BATCH_SIZE = 16
     batches = [prompt[i : i + BATCH_SIZE] for i in range(0, len(prompt), BATCH_SIZE)]
     print(f"Number of batches: {len(batches)}")
     print(f"Batch size: {len(batches[0])}")
